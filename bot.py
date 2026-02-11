@@ -43,9 +43,8 @@ def generate_ticket():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "พิมพ์รายละเอียดครั้งเดียว \n"
-
-        "ผู้แจ้ง: ...\n"
+        "แจ้งงานแบบนี้:\n\n"
+        "แจ้ง\n"
         "แผนก/ฝ่าย: ...\n"
         "แจ้งเรื่อง: ...\n"
         "ความเร่งด่วน: ด่วน/ปกติ"
@@ -62,10 +61,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         lines = text.split("\n")
 
-        location = lines[1].replace("แผนก:", "").strip()
-        asset = lines[2].replace("ทรัพย์สิน:", "").strip()
-        issue = lines[3].replace("อาการ:", "").strip()
-        priority = lines[4].replace("ความเร่งด่วน:", "").strip()
+        department = lines[1].replace("แผนก/ฝ่าย:", "").strip()
+        subject = lines[2].replace("แจ้งเรื่อง:", "").strip()
+        priority = lines[3].replace("ความเร่งด่วน:", "").strip()
 
         ticket_id = generate_ticket()
         now = thai_now()
@@ -74,12 +72,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ticket_id,
             now.strftime("%Y-%m-%d"),
             now.strftime("%H:%M"),
-            location,
-            asset,
-            issue,
+            department,
+            subject,
             priority,
             "รอดำเนินการ",
-            update.message.from_user.full_name
+            update.message.from_user.full_name,
+            ""  # เวลาปิด
         ])
 
         await update.message.reply_text(
@@ -89,9 +87,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         alert_text = (
             f"🚨 งานใหม่\n\n"
             f"📌 {ticket_id}\n"
-            f"🏢 แผนก: {location}\n"
-            f"🛠 อุปกรณ์: {asset}\n"
-            f"📝 อาการ: {issue}\n"
+            f"🏢 แผนก/ฝ่าย: {department}\n"
+            f"📝 เรื่อง: {subject}\n"
             f"⚠️ ความเร่งด่วน: {priority}\n"
             f"🕒 เวลา: {now.strftime('%H:%M')}"
         )
@@ -105,7 +102,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except:
-        await update.message.reply_text("❌ รูปแบบไม่ถูกต้อง")
+        await update.message.reply_text(
+            "❌ รูปแบบไม่ถูกต้อง\n\n"
+            "แจ้ง\n"
+            "แผนก/ฝ่าย: ...\n"
+            "แจ้งเรื่อง: ...\n"
+            "ความเร่งด่วน: ด่วน/ปกติ"
+        )
 
 # ================= CLOSE TICKET =================
 
@@ -116,7 +119,8 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         for i, row in enumerate(records):
             if row["Ticket"] == ticket_id:
-                sheet.update_cell(i + 2, 8, "เสร็จแล้ว")
+                sheet.update_cell(i + 2, 7, "เสร็จแล้ว")  # สถานะ
+                sheet.update_cell(i + 2, 9, thai_now().strftime("%Y-%m-%d %H:%M"))
                 break
         else:
             await update.message.reply_text("❌ ไม่พบ Ticket")
@@ -124,8 +128,13 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"✅ ปิดงาน {ticket_id} แล้ว")
 
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=f"🔒 {ticket_id} ถูกปิดโดย {update.message.from_user.full_name}"
+        )
+
     except:
-        await update.message.reply_text("ใช้คำสั่งแบบนี้: /done MT-2026-0001")
+        await update.message.reply_text("ใช้คำสั่งแบบนี้:\n/done MT-2026-0001")
 
 # ================= DASHBOARD =================
 
@@ -137,8 +146,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     done_count = len([r for r in records if r["สถานะ"] == "เสร็จแล้ว"])
     urgent = len([r for r in records if r["ความเร่งด่วน"] == "ด่วน"])
 
-    # แยกตามแผนก
-    department_counter = Counter([r["แผนก"] for r in records])
+    department_counter = Counter([r["แผนก/ฝ่าย"] for r in records])
 
     dept_text = ""
     for dept, count in department_counter.items():
@@ -150,7 +158,7 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"รอดำเนินการ: {pending}\n"
         f"เสร็จแล้ว: {done_count}\n"
         f"งานด่วน: {urgent}\n\n"
-        f"📌 แยกตามแผนก\n{dept_text}"
+        f"📌 แยกตามแผนก/ฝ่าย\n{dept_text}"
     )
 
     await update.message.reply_text(message)
