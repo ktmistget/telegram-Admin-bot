@@ -43,11 +43,11 @@ def generate_ticket():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "พิมพ์แบบนี้ครั้งเดียวจบ \n"
-        "เรื่อง: ...\n"
-        "แผนก: ...\n"
-        "ทรัพย์สิน: ...\n"
-        "อาการ: ...\n"
+        "พิมพ์รายละเอียดครั้งเดียว \n"
+
+        "ผู้แจ้ง: ...\n"
+        "แผนก/ฝ่าย: ...\n"
+        "แจ้งเรื่อง: ...\n"
         "ความเร่งด่วน: ด่วน/ปกติ"
     )
 
