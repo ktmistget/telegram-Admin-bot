@@ -23,7 +23,7 @@ creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
 creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
-sheet = client.open("ระบบแจ้งซ่อมสำนักงาน").sheet1
+sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1xS3hWxpqjeJj5UKwdwiegBCFNoga7ldsNFqxBgilM8A/edit?usp=drive_link").sheet1
 
 # ================== TELEGRAM SETUP ==================
 
