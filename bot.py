@@ -27,7 +27,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "สวัสดีค่ะ 😊\nพิมพ์คำว่า 'แจ้งซ่อม' เพื่อแจ้งปัญหา"
+        f"Chat ID ของคุณคือ: {update.message.chat_id}"
     )
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
