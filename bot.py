@@ -23,7 +23,7 @@ creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
 creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
-sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1xS3hWxpqjeJj5UKwdwiegBCFNoga7ldsNFqxBgilM8A/edit?usp=drive_link").sheet1
+sheet = client.open("ระบบแจ้งซ่อมสำนักงาน").sheet1
 
 # ================== TELEGRAM SETUP ==================
 
@@ -33,7 +33,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"Chat ID ของคุณคือ: {update.effective_chat.id}"
+        "สวัสดีค่ะ 😊\nพิมพ์คำว่า 'แจ้งซ่อม' เพื่อแจ้งปัญหา"
     )
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,7 +104,7 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
 """
 
     await context.bot.send_message(
-        chat_id=CHAT_ID,
+        chat_id=-5105711109,
         text=message
     )
 
