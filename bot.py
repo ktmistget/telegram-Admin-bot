@@ -1,7 +1,9 @@
 import os
 import json
 import gspread
+import pytz
 from datetime import datetime
+from collections import Counter
 from google.oauth2.service_account import Credentials
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
@@ -9,7 +11,9 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, Con
 # ================= CONFIG =================
 
 TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_CHAT_ID = -5105711109  # ใส่เลขกลุ่มธุรการของคุณ
+ADMIN_CHAT_ID = -5105711109  # กลุ่มธุรการ
+
+THAI_TZ = pytz.timezone("Asia/Bangkok")
 
 # ================= GOOGLE SHEET =================
 
@@ -26,18 +30,20 @@ sheet = client.open("ระบบแจ้งซ่อมสำนักงา�
 
 # ================= HELPER =================
 
+def thai_now():
+    return datetime.now(THAI_TZ)
+
 def generate_ticket():
     records = sheet.get_all_records()
     count = len(records) + 1
-    year = datetime.now().year
+    year = thai_now().year
     return f"MT-{year}-{str(count).zfill(4)}"
 
-# ================= COMMAND START =================
+# ================= START =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "วิธีแจ้งซ่อม:\n\n"
-        "พิมพ์แบบนี้ครั้งเดียวจบ\n\n"
+        "แจ้งงานแบบนี้: ...\n"
         "แจ้ง\n"
         "แผนก: ...\n"
         "ทรัพย์สิน: ...\n"
@@ -45,7 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ความเร่งด่วน: ด่วน/ปกติ"
     )
 
-# ================= MAIN HANDLER =================
+# ================= CREATE TICKET =================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
@@ -62,9 +68,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         priority = lines[4].replace("ความเร่งด่วน:", "").strip()
 
         ticket_id = generate_ticket()
-        now = datetime.now()
+        now = thai_now()
 
-        # ===== บันทึกลง Sheet =====
         sheet.append_row([
             ticket_id,
             now.strftime("%Y-%m-%d"),
@@ -77,20 +82,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.message.from_user.full_name
         ])
 
-        # ===== ตอบกลับผู้แจ้ง =====
         await update.message.reply_text(
             f"✅ บันทึกเรียบร้อย\n📌 Ticket: {ticket_id}"
         )
 
-        # ===== แจ้งเตือนเข้ากลุ่ม =====
         alert_text = (
-            f"🚨 มีงานแจ้งซ่อมใหม่\n\n"
-            f"📌 Ticket: {ticket_id}\n"
+            f"🚨 งานใหม่\n\n"
+            f"📌 {ticket_id}\n"
             f"🏢 แผนก: {location}\n"
             f"🛠 อุปกรณ์: {asset}\n"
             f"📝 อาการ: {issue}\n"
             f"⚠️ ความเร่งด่วน: {priority}\n"
-            f"👤 ผู้แจ้ง: {update.message.from_user.full_name}"
+            f"🕒 เวลา: {now.strftime('%H:%M')}"
         )
 
         if priority == "ด่วน":
@@ -102,21 +105,63 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except:
-        await update.message.reply_text(
-            "❌ รูปแบบไม่ถูกต้อง\n\n"
-            "กรุณาพิมพ์แบบนี้:\n\n"
-            "แจ้ง\n"
-            "แผนก: ...\n"
-            "ทรัพย์สิน: ...\n"
-            "อาการ: ...\n"
-            "ความเร่งด่วน: ด่วน/ปกติ"
-        )
+        await update.message.reply_text("❌ รูปแบบไม่ถูกต้อง")
 
-# ================= RUN APP =================
+# ================= CLOSE TICKET =================
+
+async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        ticket_id = context.args[0]
+        records = sheet.get_all_records()
+
+        for i, row in enumerate(records):
+            if row["Ticket"] == ticket_id:
+                sheet.update_cell(i + 2, 8, "เสร็จแล้ว")
+                break
+        else:
+            await update.message.reply_text("❌ ไม่พบ Ticket")
+            return
+
+        await update.message.reply_text(f"✅ ปิดงาน {ticket_id} แล้ว")
+
+    except:
+        await update.message.reply_text("ใช้คำสั่งแบบนี้: /done MT-2026-0001")
+
+# ================= DASHBOARD =================
+
+async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    records = sheet.get_all_records()
+
+    total = len(records)
+    pending = len([r for r in records if r["สถานะ"] == "รอดำเนินการ"])
+    done_count = len([r for r in records if r["สถานะ"] == "เสร็จแล้ว"])
+    urgent = len([r for r in records if r["ความเร่งด่วน"] == "ด่วน"])
+
+    # แยกตามแผนก
+    department_counter = Counter([r["แผนก"] for r in records])
+
+    dept_text = ""
+    for dept, count in department_counter.items():
+        dept_text += f"{dept}: {count} งาน\n"
+
+    message = (
+        f"📊 Dashboard ผู้บริหาร\n\n"
+        f"งานทั้งหมด: {total}\n"
+        f"รอดำเนินการ: {pending}\n"
+        f"เสร็จแล้ว: {done_count}\n"
+        f"งานด่วน: {urgent}\n\n"
+        f"📌 แยกตามแผนก\n{dept_text}"
+    )
+
+    await update.message.reply_text(message)
+
+# ================= RUN =================
 
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("done", done))
+app.add_handler(CommandHandler("dashboard", dashboard))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 app.run_polling()
