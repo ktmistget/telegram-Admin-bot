@@ -1,10 +1,16 @@
 import os
-import gspread
 import json
+import gspread
 from datetime import datetime, time
 from google.oauth2.service_account import Credentials
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
 # ================== GOOGLE SHEET SETUP ==================
 
@@ -27,7 +33,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"Chat ID ของคุณคือ: {update.message.chat_id}"
+        "สวัสดีค่ะ 😊\nพิมพ์คำว่า 'แจ้งซ่อม' เพื่อแจ้งปัญหา"
     )
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -76,6 +82,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================== DAILY REPORT ==================
 
+CHAT_ID = 123456789  # 🔴 ใส่ Chat ID จริงของคุณตรงนี้
+
 async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     records = sheet.get_all_records()
 
@@ -87,8 +95,7 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
     pending = len([r for r in today_records if r["สถานะ"] == "รอดำเนินการ"])
     done = len([r for r in today_records if r["สถานะ"] == "เสร็จแล้ว"])
 
-    message = f"""
-📊 สรุปแจ้งซ่อมประจำวัน
+    message = f"""📊 สรุปแจ้งซ่อมประจำวัน
 
 ทั้งหมด: {total}
 ด่วน: {urgent}
@@ -97,3 +104,20 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE):
 """
 
     await context.bot.send_message(
+        chat_id=CHAT_ID,
+        text=message
+    )
+
+# ================== APP START ==================
+
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & filters.Regex("แจ้งซ่อม"), report))
+app.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+# ⏰ ส่งรายงานทุกวัน 17:00 เวลาไทย
+# Render ใช้ UTC → 17:00 ไทย = 10:00 UTC
+app.job_queue.run_daily(daily_report, time(hour=10, minute=0))
+
+app.run_polling()
